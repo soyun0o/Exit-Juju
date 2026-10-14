@@ -191,13 +191,13 @@
     <div id="main-section" class="hidden">
       <label>구매자 고유번호</label>
       <div class="buyer-input-row">
-        <input type="text" id="buyer-id" placeholder="구매자 고유번호 입력" oninput="onBuyerIdChanged()" style="flex:1;">
+        <input type="text" id="buyer-id" placeholder="구매자 고유번호 입력" oninput="onBuyerIdChanged()" onblur="lookupBuyerName()" style="flex:1;">
         <button type="button" class="check-bl-btn" onclick="manualCheckBlacklist()">블랙리스트 확인</button>
       </div>
       <span id="blacklist-warning" class="warning-text hidden">⚠️ 블랙리스트에 등록되어 있습니다. 판매가 불가능합니다.</span>
       
-      <label>구매자 이름</label>
-      <input type="text" id="buyer-name" placeholder="구매자 이름 입력">
+      <label>구매자 이름 (고유번호 입력 시 자동완성)</label>
+      <input type="text" id="buyer-name" placeholder="구매자 이름 입력 또는 자동완성">
       
       <label>풀패키지 수량 (최대 1개)</label>
       <input type="number" id="q1" value="0" min="0" oninput="validateStockAndPreview()">
@@ -260,7 +260,7 @@
   </div>
 
   <script>
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwyE81MSP9f7E_RkOKckMwrJmFq4Q9zouzsTRbqB38AhjCol19Bv-7AswAMbJUlO3E/exec"; // 본인 앱 스크립트 URL 입력
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwyE81MSP9f7E_RkOKckMwrJmFq4Q9zouzsTRbqB38AhjCol19Bv-7AswAMbJUlO3E/exec";
     const PRICES = [400000000, 200000000, 100000000, 300000000];
     const MAX_STOCKS = [1, 5, 5, 2];
     
@@ -277,7 +277,7 @@
     function initApp() {
       loadSavedLoginInfo();
       loadThemeSetting();
-      fetchSalesRanking(); // 새로고침 없이도 순위 표시
+      fetchSalesRanking();
     }
 
     // 🌟 다크모드 / 라이트모드 토글 함수
@@ -321,6 +321,39 @@
     function showSignup() { document.getElementById('signup-section').classList.remove('hidden'); }
     function hideSignup() { document.getElementById('signup-section').classList.add('hidden'); }
 
+    // 🌟 회원가입 처리 함수 추가됨
+    async function handleSignup() {
+      const id = document.getElementById('signup-id').value.trim();
+      const pw = document.getElementById('signup-pw').value;
+      const name = document.getElementById('signup-name').value.trim();
+
+      if (!id || !pw || !name) {
+        alert('모든 항목을 입력해주세요.');
+        return;
+      }
+
+      try {
+        const response = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'signup', id, password: pw, name: name })
+        });
+        const result = await response.json();
+
+        if (result.success) {
+          alert('회원가입이 완료되었습니다! 로그인해 주세요.');
+          document.getElementById('signup-id').value = '';
+          document.getElementById('signup-pw').value = '';
+          document.getElementById('signup-name').value = '';
+          hideSignup();
+        } else {
+          alert(result.message || '회원가입에 실패했습니다.');
+        }
+      } catch (e) {
+        alert('네트워크 오류가 발생했습니다.');
+        console.error(e);
+      }
+    }
+
     async function fetchSalesRanking() {
       try {
         const response = await fetch(SCRIPT_URL, {
@@ -356,6 +389,26 @@
       isCheckedBlacklist = false;
       document.getElementById('blacklist-warning').classList.add('hidden');
       checkBuyerLifetimeStatus();
+    }
+
+    async function lookupBuyerName() {
+      const buyerId = document.getElementById('buyer-id').value.trim();
+      const buyerNameInput = document.getElementById('buyer-name');
+      
+      if (!buyerId) return;
+
+      try {
+        const response = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'getBuyerName', buyerId })
+        });
+        const result = await response.json();
+        if (result.success && result.name) {
+          buyerNameInput.value = result.name;
+        }
+      } catch (e) {
+        console.error('구매자 이름 자동조회 실패:', e);
+      }
     }
 
     function onNewbieQtyChanged() {
@@ -621,7 +674,7 @@
       document.getElementById('user-status-section').classList.add('hidden');
       document.getElementById('login-bar-section').classList.remove('hidden');
       document.getElementById('main-section').classList.add('hidden');
-      document.getElementById('locked-message').classList.add('hidden');
+      document.getElementById('locked-message').classList.remove('hidden');
       document.getElementById('blacklist-btn').classList.add('hidden');
       document.getElementById('admin-blacklist-form').classList.add('hidden');
     }
